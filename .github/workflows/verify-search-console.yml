@@ -1,0 +1,43 @@
+name: Verify public Search Console file
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/verify-search-console.yml"
+      - "google4ccad173f8044d5c.html"
+      - "index.html"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Confirm verification URL responds with the expected file
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://keylimesoda.github.io/google4ccad173f8044d5c.html"
+          expected="google-site-verification: google4ccad173f8044d5c.html"
+          for attempt in {1..8}; do
+            status=$(curl --location --max-time 20 --silent --show-error \
+              --output /tmp/search-console-file \
+              --write-out '%{http_code}' "$url") || status="network_error"
+            echo "Attempt $attempt: HTTP $status"
+            if [[ "$status" == "200" ]] && grep -Fxq "$expected" /tmp/search-console-file; then
+              echo "Verified: exact expected content is publicly accessible."
+              exit 0
+            fi
+            if [[ "$attempt" != "8" ]]; then sleep 15; fi
+          done
+          echo "::error::The verification URL did not return the expected file."
+          if [[ -f /tmp/search-console-file ]]; then
+            echo "First 200 bytes of response:"
+            head -c 200 /tmp/search-console-file
+            echo
+          fi
+          exit 1
